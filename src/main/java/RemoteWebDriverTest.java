@@ -6,16 +6,15 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.openqa.selenium.By;
 import org.openqa.selenium.Platform;
-import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.remote.DesiredCapabilities;
 import org.openqa.selenium.remote.RemoteWebDriver;
-import org.openqa.selenium.support.ui.ExpectedCondition;
-import org.openqa.selenium.support.ui.WebDriverWait;
 
 import java.io.IOException;
 import java.net.URL;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
@@ -29,6 +28,7 @@ public class RemoteWebDriverTest {
     private static final String siteUnderTest = "http://nxc.co.il/demoaut/index.php";
     private static ThreadLocal<RemoteWebDriver> driver = new ThreadLocal<>();
     private static DesiredCapabilities capabilities;
+    private static Library lib;
 
     private static void setInitialCapabilities(String user, String password) {
         capabilities = new DesiredCapabilities("MobileOS", "", Platform.ANY);
@@ -57,6 +57,12 @@ public class RemoteWebDriverTest {
         String password = sampler.getThreadContext().getVariables().get("perfectoPassword");
         String caps = sampler.getThreadContext().getVariables().get("desiredCapabilities");
 
+        /*String resultString;
+        Properties prop = new Properties();
+        Properties pageObjects = new Properties();
+        prop.load(new FileInputStream("resources/Test.properties"));
+        pageObjects.load(new FileInputStream("resources/object.properties"));*/
+
         setInitialCapabilities(user, password);
         addUserDefinedCapabilities(caps);
 
@@ -71,12 +77,17 @@ public class RemoteWebDriverTest {
         driver.set(new RemoteWebDriver(new URL("https://" + host + "/nexperience/perfectomobile/wd/hub"), capabilities));
         driver.get().manage().timeouts().implicitlyWait(15, TimeUnit.SECONDS);
         log.info(driver.get().getCapabilities().toString());
+        lib = new Library(driver.get());
+        lib.vitalsStart();
+        lib.home();
     }
 
     @AfterClass
     public static void oneTimeTearDown(  ) {
         // do your one-time tear down here!
         try {
+            lib.home();
+            lib.vitalsStop();
             // Retrieve the URL of the Wind Tunnel Report, can be saved to your execution summary and used to download the report at a later point
             String reportURL = (String) (driver.get().getCapabilities().getCapability(WindTunnelUtils.WIND_TUNNEL_REPORT_URL_CAPABILITY));
             log.info("WindTunnel Report URL:\n\t" + reportURL);
@@ -93,8 +104,8 @@ public class RemoteWebDriverTest {
     @Test
     public void testGetWebSite() {
         driver.get().get(siteUnderTest);
-        WebElement seat = driver.get().findElement(By.id("seat"));
-        Assert.assertNotNull(seat);
+        //WebElement seat = driver.get().findElement(By.id("seat"));
+        Assert.assertTrue("true".equals(lib.findText("\"Perfecto Virtual\"") + ""));
     }
 
     @Test
@@ -124,19 +135,30 @@ public class RemoteWebDriverTest {
 
     @Test
     public void testLoginToSiteVerifyWelcome() {
+
         //Login to web application - set user and password
         driver.get().findElement(By.name("username")).sendKeys("John");
         driver.get().findElement(By.name("password")).sendKeys("Perfecto1");
         driver.get().findElement(By.cssSelector(".login>div>button")).click();
+        long uxTimer1 = lib.step(3000, "signInBtn", "timer1");
+        lib.findText("\"Welcome back John\"");
+        long uxTimer2 = lib.step(3000, "welcomeText", "timer2");
 
         //Text checkpoint on "Welcome back John"
-        (new WebDriverWait(driver.get(), 10)).until(new ExpectedCondition<Boolean>() {
+        /*(new WebDriverWait(driver.get(), 10)).until(new ExpectedCondition<Boolean>() {
             public Boolean apply(WebDriver d) {
                 return d.findElement(By.cssSelector("#welcome>h3")) != null;
             }
         });
 
         String welcomeText = driver.get().findElement(By.cssSelector("#welcome>h3")).getText();
-        Assert.assertTrue(welcomeText.contains("Welcome back John"));
+        Assert.assertTrue(welcomeText.contains("Welcome back John"));*/
+        Map<String, Object> params3 = new HashMap<>();
+        // Check for the text that indicates that the sign in was successful
+        params3.put("content", "Welcome back John");
+        // allow up-to 30 seconds for the page to display
+        params3.put("timeout", "30");
+        Assert.assertTrue("true".equals(driver.get().executeScript("mobile:checkpoint:text", params3) + ""));
+
     }
 }
