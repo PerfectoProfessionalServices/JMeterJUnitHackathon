@@ -1,3 +1,5 @@
+import org.apache.jmeter.protocol.java.sampler.JUnitSampler;
+import org.apache.jorphan.logging.LoggingManager;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -22,37 +24,53 @@ import java.util.concurrent.TimeUnit;
  */
 public class RemoteWebDriverTest {
 
-    // TODO Replace <YOUR_CLOUD> with your Perfecto Cloud url. Ex. "partners.perfectomobile.com"
-    private static final String host = <YOUR_CLOUD>;
+    private final static org.apache.log.Logger log = LoggingManager.getLoggerForClass();
+
     private static final String siteUnderTest = "http://nxc.co.il/demoaut/index.php";
     private static ThreadLocal<RemoteWebDriver> driver = new ThreadLocal<>();
     private static DesiredCapabilities capabilities;
 
-    private static void setInitialCapabilities() {
+    private static void setInitialCapabilities(String user, String password) {
         capabilities = new DesiredCapabilities("MobileOS", "", Platform.ANY);
-        // TODO Replace <YOUR_USER> with your Perfecto Cloud username (email) "String"
-        capabilities.setCapability("user", <YOUR_USER>);
-        // TODO Replace <YOUR_PASSWORD> with your Perfecto Cloud password "String"
-        capabilities.setCapability("password", <YOUR_PASSWORD>);
-        capabilities.setCapability("os", "Android|iOS");
+        capabilities.setCapability("user", user);
+        capabilities.setCapability("password", password);
         capabilities.setCapability(WindTunnelUtils.WIND_TUNNEL_PERSONA_CAPABILITY, WindTunnelUtils.EMPTY);
         capabilities.setCapability("scriptName", "HackathonDemoTest");
+    }
+
+    private static void addUserDefinedCapabilities(String caps) {
+        if (caps == null || caps.indexOf("=") < 0)
+            return;
+        for (String capKeyValue : caps.split(","))
+            if (capKeyValue != null && capKeyValue.length() > 3 && capKeyValue.indexOf("=") > 0)
+                capabilities.setCapability(capKeyValue.split("=")[0], capKeyValue.split("=")[1]);
     }
 
     @BeforeClass
     public static void oneTimeSetUp(  ) throws Exception {
         // do your one-time setup here!
-        System.out.println("Getting Driver...");
+        log.info("Getting Driver...");
 
-        setInitialCapabilities();
+        JUnitSampler sampler = new JUnitSampler();
+        String host = sampler.getThreadContext().getVariables().get("perfectoHost");
+        String user = sampler.getThreadContext().getVariables().get("perfectoUser");
+        String password = sampler.getThreadContext().getVariables().get("perfectoPassword");
+        String caps = sampler.getThreadContext().getVariables().get("desiredCapabilities");
+
+        setInitialCapabilities(user, password);
+        addUserDefinedCapabilities(caps);
+
         // Call this method if you want the script to share the devices with the Perfecto Lab plugin.
         try {
             PerfectoLabUtils.setExecutionIdCapability(capabilities, host);
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+        log.info(capabilities.toString());
         driver.set(new RemoteWebDriver(new URL("https://" + host + "/nexperience/perfectomobile/wd/hub"), capabilities));
         driver.get().manage().timeouts().implicitlyWait(15, TimeUnit.SECONDS);
+        log.info(driver.get().getCapabilities().toString());
     }
 
     @AfterClass
@@ -61,13 +79,13 @@ public class RemoteWebDriverTest {
         try {
             // Retrieve the URL of the Wind Tunnel Report, can be saved to your execution summary and used to download the report at a later point
             String reportURL = (String) (driver.get().getCapabilities().getCapability(WindTunnelUtils.WIND_TUNNEL_REPORT_URL_CAPABILITY));
-            System.out.println(reportURL);
+            log.info("WindTunnel Report URL:\n\t" + reportURL);
             driver.get().close();
         } catch (Exception e) {
             e.printStackTrace();
         }
         driver.get().quit();
-        System.out.println("Run ended");
+        log.info("Run ended, Driver closed/quit");
     }
 
     public RemoteWebDriverTest() {}
