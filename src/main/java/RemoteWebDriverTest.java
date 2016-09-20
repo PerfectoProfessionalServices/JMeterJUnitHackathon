@@ -28,7 +28,6 @@ public class RemoteWebDriverTest {
     private static final String siteUnderTest = "http://nxc.co.il/demoaut/index.php";
     private static ThreadLocal<RemoteWebDriver> driver = new ThreadLocal<>();
     private static ThreadLocal<DesiredCapabilities> capabilities = new ThreadLocal<>();
-    private static Library lib;
 
     private static void setInitialCapabilities(String user, String password) {
         DesiredCapabilities dcaps = new DesiredCapabilities("MobileOS", "", Platform.ANY);
@@ -74,7 +73,7 @@ public class RemoteWebDriverTest {
         driver.set(new RemoteWebDriver(new URL("https://" + host + "/nexperience/perfectomobile/wd/hub"), capabilities.get()));
         driver.get().manage().timeouts().implicitlyWait(15, TimeUnit.SECONDS);
         log.info(driver.get().getCapabilities().toString());
-        lib = new Library(driver.get());
+        Library lib = new Library(driver.get());
         lib.vitalsStart();
         lib.home();
     }
@@ -85,6 +84,7 @@ public class RemoteWebDriverTest {
         JUnitSampler sampler = new JUnitSampler();
         String reportURL = "WindTunnel Report NOT Found!";
         try {
+        	Library lib = new Library(driver.get());
             lib.home();
             lib.vitalsStop();
             // Retrieve the URL of the Wind Tunnel Report, can be saved to your execution summary and used to download the report at a later point
@@ -104,6 +104,7 @@ public class RemoteWebDriverTest {
 
     @Test
     public void testGetWebSite() {
+    	Library lib = new Library(driver.get());
         driver.get().get(siteUnderTest);
         //WebElement seat = driver.get().findElement(By.id("seat"));
         Assert.assertTrue("true".equals(lib.findText("\"Perfecto Virtual\"") + ""));
@@ -136,7 +137,7 @@ public class RemoteWebDriverTest {
 
     @Test
     public void testLoginToSiteVerifyWelcome() {
-
+    	Library lib = new Library(driver.get());
         //Login to web application - set user and password
         driver.get().findElement(By.name("username")).sendKeys("John");
         driver.get().findElement(By.name("password")).sendKeys("Perfecto1");
