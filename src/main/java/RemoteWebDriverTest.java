@@ -27,23 +27,26 @@ public class RemoteWebDriverTest {
 
     private static final String siteUnderTest = "http://nxc.co.il/demoaut/index.php";
     private static ThreadLocal<RemoteWebDriver> driver = new ThreadLocal<>();
-    private static DesiredCapabilities capabilities;
+    private static ThreadLocal<DesiredCapabilities> capabilities = new ThreadLocal<>();
     private static Library lib;
 
     private static void setInitialCapabilities(String user, String password) {
-        capabilities = new DesiredCapabilities("MobileOS", "", Platform.ANY);
-        capabilities.setCapability("user", user);
-        capabilities.setCapability("password", password);
-        capabilities.setCapability(WindTunnelUtils.WIND_TUNNEL_PERSONA_CAPABILITY, WindTunnelUtils.EMPTY);
-        capabilities.setCapability("scriptName", "HackathonDemoTest");
+        DesiredCapabilities dcaps = new DesiredCapabilities("MobileOS", "", Platform.ANY);
+        dcaps.setCapability("user", user);
+        dcaps.setCapability("password", password);
+        dcaps.setCapability(WindTunnelUtils.WIND_TUNNEL_PERSONA_CAPABILITY, WindTunnelUtils.EMPTY);
+        dcaps.setCapability("scriptName", "HackathonDemoTest");
+        capabilities.set(dcaps);
     }
 
     private static void addUserDefinedCapabilities(String caps) {
         if (caps == null || caps.indexOf("=") < 0)
             return;
+        DesiredCapabilities dcaps = capabilities.get();
         for (String capKeyValue : caps.split(","))
             if (capKeyValue != null && capKeyValue.length() > 3 && capKeyValue.indexOf("=") > 0)
-                capabilities.setCapability(capKeyValue.split("=")[0], capKeyValue.split("=")[1]);
+                dcaps.setCapability(capKeyValue.split("=")[0], capKeyValue.split("=")[1]);
+        capabilities.set(dcaps);
     }
 
     @BeforeClass
@@ -57,24 +60,18 @@ public class RemoteWebDriverTest {
         String password = sampler.getThreadContext().getVariables().get("perfectoPassword");
         String caps = sampler.getThreadContext().getVariables().get("desiredCapabilities");
 
-        /*String resultString;
-        Properties prop = new Properties();
-        Properties pageObjects = new Properties();
-        prop.load(new FileInputStream("resources/Test.properties"));
-        pageObjects.load(new FileInputStream("resources/object.properties"));*/
-
         setInitialCapabilities(user, password);
         addUserDefinedCapabilities(caps);
 
         // Call this method if you want the script to share the devices with the Perfecto Lab plugin.
         try {
-            PerfectoLabUtils.setExecutionIdCapability(capabilities, host);
+            PerfectoLabUtils.setExecutionIdCapability(capabilities.get(), host);
         } catch (IOException e) {
             e.printStackTrace();
         }
 
-        log.info(capabilities.toString());
-        driver.set(new RemoteWebDriver(new URL("https://" + host + "/nexperience/perfectomobile/wd/hub"), capabilities));
+        log.info(capabilities.get().toString());
+        driver.set(new RemoteWebDriver(new URL("https://" + host + "/nexperience/perfectomobile/wd/hub"), capabilities.get()));
         driver.get().manage().timeouts().implicitlyWait(15, TimeUnit.SECONDS);
         log.info(driver.get().getCapabilities().toString());
         lib = new Library(driver.get());
@@ -85,14 +82,18 @@ public class RemoteWebDriverTest {
     @AfterClass
     public static void oneTimeTearDown(  ) {
         // do your one-time tear down here!
+        JUnitSampler sampler = new JUnitSampler();
+        String reportURL = "WindTunnel Report NOT Found!";
         try {
             lib.home();
             lib.vitalsStop();
             // Retrieve the URL of the Wind Tunnel Report, can be saved to your execution summary and used to download the report at a later point
-            String reportURL = (String) (driver.get().getCapabilities().getCapability(WindTunnelUtils.WIND_TUNNEL_REPORT_URL_CAPABILITY));
+            reportURL = (String) (driver.get().getCapabilities().getCapability(WindTunnelUtils.WIND_TUNNEL_REPORT_URL_CAPABILITY));
+            sampler.setSuccess(reportURL);
             log.info("WindTunnel Report URL:\n\t" + reportURL);
             driver.get().close();
         } catch (Exception e) {
+            sampler.setFailure(reportURL);
             e.printStackTrace();
         }
         driver.get().quit();
