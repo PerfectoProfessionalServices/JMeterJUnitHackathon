@@ -1,4 +1,5 @@
 import org.apache.jmeter.protocol.java.sampler.JUnitSampler;
+import org.apache.jmeter.threads.JMeterVariables;
 import org.apache.jorphan.logging.LoggingManager;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -28,12 +29,14 @@ public class RemoteWebDriverTest {
     private static final String siteUnderTest = "http://nxc.co.il/demoaut/index.php";
     private static ThreadLocal<RemoteWebDriver> driver = new ThreadLocal<>();
     private static ThreadLocal<DesiredCapabilities> capabilities = new ThreadLocal<>();
+    static boolean runVitals = true;
 
     private static void setInitialCapabilities(String user, String password) {
         DesiredCapabilities dcaps = new DesiredCapabilities("MobileOS", "", Platform.ANY);
         dcaps.setCapability("user", user);
         dcaps.setCapability("password", password);
         dcaps.setCapability(WindTunnelUtils.WIND_TUNNEL_PERSONA_CAPABILITY, WindTunnelUtils.EMPTY);
+        //dcaps.setCapability(WindTunnelUtils.DEVICE_NETWORK_CAPABILITY, "4g_lte_advanced_good");
         dcaps.setCapability("scriptName", "HackathonDemoTest");
         capabilities.set(dcaps);
     }
@@ -58,6 +61,7 @@ public class RemoteWebDriverTest {
         String user = sampler.getThreadContext().getVariables().get("perfectoUser");
         String password = sampler.getThreadContext().getVariables().get("perfectoPassword");
         String caps = sampler.getThreadContext().getVariables().get("desiredCapabilities");
+        runVitals = !"false".equalsIgnoreCase(sampler.getThreadContext().getVariables().get("runVitals"));
 
         setInitialCapabilities(user, password);
         addUserDefinedCapabilities(caps);
@@ -73,9 +77,9 @@ public class RemoteWebDriverTest {
         driver.set(new RemoteWebDriver(new URL("https://" + host + "/nexperience/perfectomobile/wd/hub"), capabilities.get()));
         driver.get().manage().timeouts().implicitlyWait(15, TimeUnit.SECONDS);
         log.info(driver.get().getCapabilities().toString());
-        Library lib = new Library(driver.get());
+        Library lib = new Library(driver.get(), runVitals);
         lib.vitalsStart();
-        lib.home();
+        //lib.home();
     }
 
     @AfterClass
@@ -84,13 +88,17 @@ public class RemoteWebDriverTest {
         JUnitSampler sampler = new JUnitSampler();
         String reportURL = "WindTunnel Report NOT Found!";
         try {
-        	Library lib = new Library(driver.get());
-            lib.home();
+        	Library lib = new Library(driver.get(), runVitals);
+            //lib.home();
             lib.vitalsStop();
             // Retrieve the URL of the Wind Tunnel Report, can be saved to your execution summary and used to download the report at a later point
             reportURL = (String) (driver.get().getCapabilities().getCapability(WindTunnelUtils.WIND_TUNNEL_REPORT_URL_CAPABILITY));
-            sampler.setSuccess(reportURL);
             log.info("WindTunnel Report URL:\n\t" + reportURL);
+            sampler.setSuccess(reportURL);
+            JMeterVariables vars = sampler.getThreadContext().getVariables();
+            vars.put("reportURL", reportURL);
+            sampler.getThreadContext().setVariables(vars);
+
             driver.get().close();
         } catch (Exception e) {
             sampler.setFailure(reportURL);
@@ -142,9 +150,9 @@ public class RemoteWebDriverTest {
         driver.get().findElement(By.name("username")).sendKeys("John");
         driver.get().findElement(By.name("password")).sendKeys("Perfecto1");
         driver.get().findElement(By.cssSelector(".login>div>button")).click();
-        long uxTimer1 = lib.step(3000, "signInBtn", "timer1");
+        long uxTimer1 = lib.step(30000, "signInBtn", "timer1");
         lib.findText("\"Welcome back John\"");
-        long uxTimer2 = lib.step(3000, "welcomeText", "timer2");
+        long uxTimer2 = lib.step(30000, "welcomeText", "timer2");
 
         //Text checkpoint on "Welcome back John"
         /*(new WebDriverWait(driver.get(), 10)).until(new ExpectedCondition<Boolean>() {

@@ -1,22 +1,26 @@
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.remote.RemoteWebDriver;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 public class Library {
 	private RemoteWebDriver driver;
+	private boolean runVitals = true;
 
-	public Library(RemoteWebDriver driver) {
+	public Library(RemoteWebDriver driver, boolean runVitals) {
 		this.driver = driver;
+		this.runVitals = runVitals;
 	}
 	
-	
+	public Library(RemoteWebDriver driver) {
+		this(driver, true);
+	}
 
 	public void launchApplication(String app) {
 
@@ -29,6 +33,7 @@ public class Library {
 	
 	public void vitalsStart()
 	{
+		if (!runVitals) return;
 		Map<String, Object> params1 = new HashMap<>();
 		List<String> vitals1 = new ArrayList<>();
 		vitals1.add("all");
@@ -43,6 +48,7 @@ public class Library {
 	
 	public void vitalsStop()
 	{
+		if (!runVitals) return;
 		Map<String, Object> params2 = new HashMap<>();
 		Object result2 = driver.executeScript("mobile:monitor:stop", params2);
 		
