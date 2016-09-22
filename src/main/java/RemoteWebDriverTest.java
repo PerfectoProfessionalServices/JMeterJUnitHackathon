@@ -1,3 +1,10 @@
+import com.perfecto.reportium.client.ReportiumClient;
+import com.perfecto.reportium.client.ReportiumClientFactory;
+import com.perfecto.reportium.model.PerfectoExecutionContext;
+import com.perfecto.reportium.model.Project;
+import com.perfecto.reportium.test.TestContext;
+import com.perfecto.reportium.test.result.TestResultFactory;
+import org.apache.commons.lang.time.StopWatch;
 import org.apache.jmeter.protocol.java.sampler.JUnitSampler;
 import org.apache.jmeter.threads.JMeterVariables;
 import org.apache.jorphan.logging.LoggingManager;
@@ -29,7 +36,10 @@ public class RemoteWebDriverTest {
     private static final String siteUnderTest = "http://nxc.co.il/demoaut/index.php";
     private static ThreadLocal<RemoteWebDriver> driver = new ThreadLocal<>();
     private static ThreadLocal<DesiredCapabilities> capabilities = new ThreadLocal<>();
+    private static ThreadLocal<ReportiumClient> reportiumClient = new ThreadLocal<>();
     static boolean runVitals = true;
+    static boolean runReportium = true;
+    static int timerThreshold = 30000;
 
     private static void setInitialCapabilities(String user, String password) {
         DesiredCapabilities dcaps = new DesiredCapabilities("MobileOS", "", Platform.ANY);
@@ -51,6 +61,16 @@ public class RemoteWebDriverTest {
         capabilities.set(dcaps);
     }
 
+    private static ReportiumClient createRemoteReportiumClient(RemoteWebDriver driver, DesiredCapabilities capabilities) {
+        if (!runReportium) return new ReportiumClientFactory().createLoggerClient();
+
+        PerfectoExecutionContext perfectoExecutionContext = new PerfectoExecutionContext.PerfectoExecutionContextBuilder()
+                .withProject(new Project(capabilities.getCapability("scriptName") + "", "Hackathon Demo Version 0.1"))
+                .withWebDriver(driver)
+                .build();
+        return new ReportiumClientFactory().createPerfectoReportiumClient(perfectoExecutionContext);
+    }
+
     @BeforeClass
     public static void oneTimeSetUp(  ) throws Exception {
         // do your one-time setup here!
@@ -61,7 +81,13 @@ public class RemoteWebDriverTest {
         String user = sampler.getThreadContext().getVariables().get("perfectoUser");
         String password = sampler.getThreadContext().getVariables().get("perfectoPassword");
         String caps = sampler.getThreadContext().getVariables().get("desiredCapabilities");
+        try {
+            timerThreshold = Integer.parseInt(sampler.getThreadContext().getVariables().get("timerThreshold"));
+        } catch (NumberFormatException e) {
+            e.printStackTrace();
+        }
         runVitals = !"false".equalsIgnoreCase(sampler.getThreadContext().getVariables().get("runVitals"));
+        runReportium = !"false".equalsIgnoreCase(sampler.getThreadContext().getVariables().get("runReportium"));
 
         setInitialCapabilities(user, password);
         addUserDefinedCapabilities(caps);
@@ -74,12 +100,20 @@ public class RemoteWebDriverTest {
         }
 
         log.info(capabilities.get().toString());
-        driver.set(new RemoteWebDriver(new URL("https://" + host + "/nexperience/perfectomobile/wd/hub"), capabilities.get()));
+        boolean driverStarted;
+        StopWatch timer = new StopWatch();
+        timer.start();
+        do {
+            driver.set(new RemoteWebDriver(new URL("https://" + host + "/nexperience/perfectomobile/wd/hub"), capabilities.get()));
+            driverStarted = true;
+        } while (!driverStarted && timer.getTime() < timerThreshold);
+        reportiumClient.set(createRemoteReportiumClient(driver.get(),capabilities.get()));
+        reportiumClient.get().testStart(capabilities.get().getCapability("scriptName") +"", new TestContext("Hackathon", "Jeremy", "Mitch", "Evy", "Rick", "JMeter"));
+
         driver.get().manage().timeouts().implicitlyWait(15, TimeUnit.SECONDS);
         log.info(driver.get().getCapabilities().toString());
         Library lib = new Library(driver.get(), runVitals);
         lib.vitalsStart();
-        //lib.home();
     }
 
     @AfterClass
@@ -87,9 +121,10 @@ public class RemoteWebDriverTest {
         // do your one-time tear down here!
         JUnitSampler sampler = new JUnitSampler();
         String reportURL = "WindTunnel Report NOT Found!";
+        if (driver.get() == null) return;
         try {
+
         	Library lib = new Library(driver.get(), runVitals);
-            //lib.home();
             lib.vitalsStop();
             // Retrieve the URL of the Wind Tunnel Report, can be saved to your execution summary and used to download the report at a later point
             reportURL = (String) (driver.get().getCapabilities().getCapability(WindTunnelUtils.WIND_TUNNEL_REPORT_URL_CAPABILITY));
@@ -98,10 +133,12 @@ public class RemoteWebDriverTest {
             JMeterVariables vars = sampler.getThreadContext().getVariables();
             vars.put("reportURL", reportURL);
             sampler.getThreadContext().setVariables(vars);
-
+            reportiumClient.get().testStop(TestResultFactory.createSuccess());
             driver.get().close();
         } catch (Exception e) {
             sampler.setFailure(reportURL);
+            if (reportiumClient.get() != null)
+                reportiumClient.get().testStop(TestResultFactory.createFailure("Test stop failure.", e));
             e.printStackTrace();
         }
         driver.get().quit();
@@ -112,6 +149,7 @@ public class RemoteWebDriverTest {
 
     @Test
     public void testGetWebSite() {
+        reportiumClient.get().testStep("Get Device Driver");
     	Library lib = new Library(driver.get());
         driver.get().get(siteUnderTest);
         //WebElement seat = driver.get().findElement(By.id("seat"));
@@ -145,6 +183,7 @@ public class RemoteWebDriverTest {
 
     @Test
     public void testLoginToSiteVerifyWelcome() {
+        reportiumClient.get().testStep("Login and Verify Welcome");
     	Library lib = new Library(driver.get());
         //Login to web application - set user and password
         driver.get().findElement(By.name("username")).sendKeys("John");
@@ -167,7 +206,7 @@ public class RemoteWebDriverTest {
         // Check for the text that indicates that the sign in was successful
         params3.put("content", "Welcome back John");
         // allow up-to 30 seconds for the page to display
-        params3.put("timeout", "30");
+        params3.put("timeout", timerThreshold / 1000 + "");
         Assert.assertTrue("true".equals(driver.get().executeScript("mobile:checkpoint:text", params3) + ""));
 
     }

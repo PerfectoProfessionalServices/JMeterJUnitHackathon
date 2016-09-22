@@ -31,6 +31,7 @@ dependencies {
     compile 'com.perfectomobile:http-client:9.0.0.0'
     compile 'com.perfectomobile:pm-webdriver:9.0.0.0'
     compile 'com.perfectomobile:intellij-connector:9.0.0.0'
+    compile 'com.perfecto.reporting-sdk:reportium-java:1.0.0'
     compile 'junit:junit:4.12'
     compile 'commons-codec:commons-codec:1.10'
     compile 'commons-io:commons-io:2.4'
